@@ -4,7 +4,6 @@
         'category': 'Sales',
         'summary': 'Sales Order Line, Blanket Order',
         'depends': [
-            'sale_management',
             'sale_stock'
             ],
         'data': [
