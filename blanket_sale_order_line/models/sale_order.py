@@ -9,8 +9,9 @@ class SaleOrderLine(models.Model):
     requested_date = fields.Datetime(required=True)
 
     delivery_interval = fields.Selection(
-            string="Delivery interval",
+            string="Delivery",
             selection=[
+                ('0.0', 'Repetition'),
                 ('3.5', 'Twice a week'),
                 ('7.0', 'Every week'),
                 ('14.0', 'Every 2 weeks'),
