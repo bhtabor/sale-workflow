@@ -2,6 +2,38 @@ from datetime import datetime, timedelta
 from odoo import models, fields, api
 from odoo.tools import float_compare
 from odoo.exceptions import UserError
+from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT
+
+class SaleOrder(models.Model):
+    _inherit = 'sale.order'
+
+    @api.multi
+    def _action_confirm(self):
+        super(SaleOrder, self)._action_confirm()
+
+        expire_dates = []
+
+        for line in self.order_line:
+            ordered_qty = line.product_uom_qty
+            last_date_expected = datetime.strptime(line.requested_date, DEFAULT_SERVER_DATETIME_FORMAT)
+            if (ordered_qty > 1):
+                delivery_interval = float(line.delivery_interval)
+                if (delivery_interval > 0.0):
+                    next_delivery_interval = delivery_interval
+                    for _ in range(int(ordered_qty - 1)):
+                        if (delivery_interval == 3.5):
+                            if (last_date_expected.weekday() == 2):  
+                                next_delivery_interval = 4.0
+                            elif (last_date_expected.weekday() == 6):
+                                next_delivery_interval = 3.0
+                        last_date_expected = last_date_expected + timedelta(next_delivery_interval)
+
+            expire_dates.append(last_date_expected)
+
+        if expire_dates:
+            self.write({
+                'validity_date': max(expire_dates).strftime(DEFAULT_SERVER_DATETIME_FORMAT)
+                })
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
@@ -32,6 +64,22 @@ class SaleOrderLine(models.Model):
         if self.requested_date:
             vals.update({'date_planned': self.requested_date})
         return vals
+
+    @api.onchange('product_uom', 'product_uom_qty', 'delivery_interval')
+    def product_uom_change(self):
+        super(SaleOrderLine, self).product_uom_change()
+
+    @api.multi
+    def _get_display_price(self, product):
+        if float(self.delivery_interval) > 0.0:
+            return super(SaleOrderLine, self)._get_display_price(product)
+        else:
+            final_price, rule_id = self.order_id.pricelist_id.get_product_price_rule(self.product_id, self.product_uom_qty or 1.0, self.order_id.partner_id)
+            context_partner = dict(self.env.context, partner_id=self.order_id.partner_id.id, date=self.order_id.date_order)
+            base_price, currency_id = self.with_context(context_partner)._get_real_price_currency(self.product_id, rule_id, self.product_uom_qty, self.product_uom, self.order_id.pricelist_id.id)
+            if currency_id != self.order_id.pricelist_id.currency_id.id:
+                base_price = self.env['res.currency'].browse(currency_id).with_context(context_partner).compute(base_price, self.order_id.pricelist_id.currency_id)
+            return base_price
 
     @api.multi
     def _action_launch_procurement_rule(self):
