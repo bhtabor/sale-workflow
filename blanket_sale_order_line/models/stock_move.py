@@ -5,6 +5,10 @@ from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT
 class StockMove(models.Model):
     _inherit = "stock.move"
 
+    backorder_note = fields.Text(
+            'Backorder Notes',
+            readonly=True, related='backorder_id.note', store=True)
+
     def _assign_picking(self):
         result = super(StockMove, self)._assign_picking()
         if result:
